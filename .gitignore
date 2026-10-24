@@ -1,0 +1,12 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.next/
+node_modules/
+dist/
+.env.example
+copilot-instructions.md
+.vscode/
