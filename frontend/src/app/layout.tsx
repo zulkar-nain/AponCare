@@ -4,7 +4,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "AponCare HMIS",
-  description: "Healthcare management information system"
+  description:
+    "AponCare brings patient records, care encounters, and prescriptions into one clear workspace for clinics and patients."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
