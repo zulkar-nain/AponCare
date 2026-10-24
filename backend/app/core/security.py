@@ -18,7 +18,9 @@ def verify_password(password: str, hashed: str) -> bool:
     return password_hash.verify(password, hashed)
 
 
-def create_access_token(*, user_id: UUID, tenant_id: UUID, role: str) -> str:
+def create_access_token(
+    *, user_id: UUID, tenant_id: UUID, role: str, password_change_required: bool = False
+) -> str:
     expires_at = datetime.now(timezone.utc) + timedelta(
         minutes=settings.jwt_access_token_expire_minutes
     )
@@ -28,6 +30,7 @@ def create_access_token(*, user_id: UUID, tenant_id: UUID, role: str) -> str:
             "tenant_id": str(tenant_id),
             "role": role,
             "jti": str(uuid4()),
+            "password_change_required": password_change_required,
             "exp": expires_at,
         },
         settings.jwt_secret_key,

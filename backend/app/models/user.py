@@ -18,6 +18,9 @@ class User(SQLModel, table=True):
     totp_enabled: bool = Field(
         default=False, sa_column=Column(Boolean, nullable=False, server_default="false")
     )
+    password_change_required: bool = Field(
+        default=False, sa_column=Column(Boolean, nullable=False, server_default="false")
+    )
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     )

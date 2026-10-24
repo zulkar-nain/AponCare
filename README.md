@@ -10,7 +10,10 @@ It is a development scaffold, not a production-ready or clinically validated sys
    `POSTGRES_PASSWORD`, respectively.
 2. Start services with `docker compose up --build`.
 3. Open the frontend at `http://localhost:3000` and the API docs at `http://localhost:8000/docs`.
-4. Create the initial organization using `POST /api/v1/auth/signup`; use its returned tenant ID when signing in.
+4. Create the initial organization using `POST /api/v1/auth/signup`; give its tenant ID to patients
+   so they can create portal accounts at `/patient-signup`.
+5. Front-desk staff can register patients with portal access from the Patients page. Share the
+   displayed temporary password with the patient; the patient must change it at first sign-in.
 
 PostgreSQL initialization enables `pgcrypto` and creates a non-superuser application role. The
 backend connects with that role; Alembic runs with the separate migration/admin URL. Migrations apply

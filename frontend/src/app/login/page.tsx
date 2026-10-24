@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useAuth, type AuthUser } from "@/lib/auth-context";
@@ -32,7 +33,7 @@ export default function LoginPage() {
         })
       });
       setUser(user);
-      router.replace("/dashboard");
+      router.replace(user.password_change_required ? "/change-password" : "/dashboard");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to sign in");
     } finally {
@@ -92,6 +93,12 @@ export default function LoginPage() {
         <Button className="w-full" disabled={busy}>
           {busy ? "Signing in..." : "Sign in"}
         </Button>
+        <p className="text-center text-sm text-muted-foreground">
+          New patient?{" "}
+          <Link href="/patient-signup" className="font-medium text-primary underline">
+            Create a patient account
+          </Link>
+        </p>
       </form>
     </main>
   );

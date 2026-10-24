@@ -8,6 +8,7 @@ export type AuthUser = {
   tenant_name: string;
   user_role: string;
   user_name: string;
+  password_change_required: boolean;
 };
 
 type AuthContextValue = {

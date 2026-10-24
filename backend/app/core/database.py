@@ -45,6 +45,14 @@ class TenantSessionMiddleware(BaseHTTPMiddleware):
             except RedisError:
                 logger.exception("Session store unavailable")
                 return JSONResponse({"detail": "Authentication service unavailable"}, status_code=503)
+            if claims.get("password_change_required") and request.url.path not in {
+                "/api/v1/auth/change-password",
+                "/api/v1/auth/logout",
+            }:
+                return JSONResponse(
+                    {"detail": "Change your temporary password to continue"},
+                    status_code=403,
+                )
 
         async with SessionFactory() as session:
             request.state.db_session = session

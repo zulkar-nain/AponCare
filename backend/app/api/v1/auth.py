@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID, uuid4
 
 import pyotp
@@ -10,7 +11,7 @@ from app.core.config import settings
 from app.core.database import get_db_session
 from app.core.dependencies import authenticated_user_id, get_current_user
 from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
-from app.models import Tenant, User
+from app.models import Patient, Tenant, User
 
 router = APIRouter()
 
@@ -20,6 +21,16 @@ class SignupRequest(BaseModel):
     full_name: str = PydanticField(min_length=1, max_length=200)
     email: EmailStr
     password: str = PydanticField(min_length=12, max_length=128)
+
+
+class PatientSignupRequest(BaseModel):
+    tenant_id: UUID
+    full_name: str = PydanticField(min_length=1, max_length=200)
+    email: EmailStr
+    password: str = PydanticField(min_length=12, max_length=128)
+    date_of_birth: date | None = None
+    sex: str | None = PydanticField(default=None, max_length=32)
+    phone: str | None = PydanticField(default=None, max_length=64)
 
 
 class LoginRequest(BaseModel):
@@ -36,6 +47,12 @@ class TokenResponse(BaseModel):
     tenant_name: str
     user_role: str
     user_name: str
+    password_change_required: bool = False
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = PydanticField(min_length=12, max_length=128)
 
 
 class TotpVerifyRequest(BaseModel):
@@ -50,7 +67,12 @@ async def set_current_tenant(session: AsyncSession, tenant_id: UUID) -> None:
 
 
 async def create_user_session(request: Request, user: User) -> str:
-    token = create_access_token(user_id=user.id, tenant_id=user.tenant_id, role=user.role)
+    token = create_access_token(
+        user_id=user.id,
+        tenant_id=user.tenant_id,
+        role=user.role,
+        password_change_required=user.password_change_required,
+    )
     token_id = decode_access_token(token)["jti"]
     session_key = f"auth-session:{token_id}"
     redis = request.app.state.redis
@@ -90,6 +112,57 @@ async def signup(
     )
 
 
+@router.post("/patient-signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+async def patient_signup(
+    body: PatientSignupRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+) -> TokenResponse:
+    await set_current_tenant(session, body.tenant_id)
+    tenant_result = await session.execute(
+        select(Tenant).where(Tenant.tenant_id == body.tenant_id)
+    )
+    tenant = tenant_result.scalar_one_or_none()
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    email = body.email.lower()
+    existing = await session.execute(
+        select(User.id).where(User.tenant_id == body.tenant_id, User.email == email)
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=409, detail="Unable to register with those details")
+
+    user = User(
+        id=uuid4(),
+        tenant_id=body.tenant_id,
+        email=email,
+        full_name=body.full_name,
+        password_hash=hash_password(body.password),
+        role="patient_portal",
+    )
+    patient = Patient(
+        id=uuid4(),
+        tenant_id=body.tenant_id,
+        user_id=user.id,
+        full_name=body.full_name,
+        date_of_birth=body.date_of_birth,
+        sex=body.sex,
+        phone=body.phone,
+    )
+    session.add(user)
+    await session.flush()
+    session.add(patient)
+    await session.flush()
+    return TokenResponse(
+        access_token=await create_user_session(request, user),
+        tenant_id=body.tenant_id,
+        tenant_name=tenant.name,
+        user_role=user.role,
+        user_name=user.full_name,
+    )
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login(
     body: LoginRequest,
@@ -117,6 +190,41 @@ async def login(
         tenant_name=tenant.name,
         user_role=user.role,
         user_name=user.full_name,
+        password_change_required=user.password_change_required,
+    )
+
+
+@router.post("/change-password", response_model=TokenResponse)
+async def change_password(
+    body: ChangePasswordRequest,
+    request: Request,
+    claims: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> TokenResponse:
+    user_id = authenticated_user_id(claims)
+    tenant_id = UUID(claims["tenant_id"])
+    result = await session.execute(
+        select(User).where(User.id == user_id, User.tenant_id == tenant_id)
+    )
+    user = result.scalar_one_or_none()
+    if user is None or not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if verify_password(body.new_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Choose a different new password")
+
+    user.password_hash = hash_password(body.new_password)
+    user.password_change_required = False
+    await session.flush()
+    await request.app.state.redis.delete(f"auth-session:{claims['jti']}")
+    tenant_result = await session.execute(select(Tenant).where(Tenant.tenant_id == tenant_id))
+    tenant = tenant_result.scalar_one()
+    return TokenResponse(
+        access_token=await create_user_session(request, user),
+        tenant_id=tenant_id,
+        tenant_name=tenant.name,
+        user_role=user.role,
+        user_name=user.full_name,
+        password_change_required=False,
     )
 
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/navigation/sidebar";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/api-client";
@@ -11,6 +11,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, setUser } = useAuth();
   const router = useRouter();
   const [logoutError, setLogoutError] = useState("");
+
+  useEffect(() => {
+    if (user?.password_change_required) {
+      router.replace("/change-password");
+    }
+  }, [router, user]);
+
+  if (user?.password_change_required) {
+    return null;
+  }
 
   if (!user) {
     return (
